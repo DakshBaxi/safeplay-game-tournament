@@ -10,7 +10,6 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Tournament Organizer Dashboard",
   description: "Manage your gaming tournaments efficiently",
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({

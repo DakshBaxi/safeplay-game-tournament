@@ -42,24 +42,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       icon: PlusCircle,
       current: pathname === "/tournaments/create",
     },
-    {
-      name: "Calendar",
-      href: "/calendar",
-      icon: Calendar,
-      current: pathname === "/calendar",
-    },
-    {
-      name: "Team Management",
-      href: "/teams",
-      icon: Users,
-      current: pathname === "/teams",
-    },
-    {
-      name: "Settings",
-      href: "/settings",
-      icon: Settings,
-      current: pathname === "/settings",
-    },
+    // {
+    //   name: "Calendar",
+    //   href: "/calendar",
+    //   icon: Calendar,
+    //   current: pathname === "/calendar",
+    // },
+    // {
+    //   name: "Team Management",
+    //   href: "/teams",
+    //   icon: Users,
+    //   current: pathname === "/teams",
+    // },
+      // {
+      //   name: "Settings",
+      //   href: "/settings",
+      //   icon: Settings,
+      //   current: pathname === "/settings",
+      // },
   ]
 
   return (
@@ -76,7 +76,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="bg-primary/20 text-primary p-1 rounded">
               <Trophy size={20} />
             </div>
-            {!collapsed && <span className="font-bold text-lg">TourneyPro</span>}
+            {!collapsed && <span className="font-bold text-lg">SafePlay</span>}
           </div>
           <Button variant="ghost" size="sm" className={collapsed ? "hidden" : ""} onClick={() => setCollapsed(true)}>
             <ChevronDown className="rotate-90" size={16} />
