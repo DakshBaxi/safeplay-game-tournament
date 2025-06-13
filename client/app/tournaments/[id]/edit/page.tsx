@@ -1,10 +1,11 @@
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { TournamentEditForm } from "@/components/tournament-edit-form"
 
-export default function EditTournamentPage({ params }: { params: { id: string } }) {
+export default async function EditTournamentPage(promise: { params: Promise<{ id: string }> }) {
+  const { id } = await promise.params;
   return (
     <DashboardLayout>
-      <TournamentEditForm id={params.id} />
+      <TournamentEditForm id={id} />
     </DashboardLayout>
   )
 }

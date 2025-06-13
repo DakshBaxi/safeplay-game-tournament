@@ -1,10 +1,12 @@
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { TournamentDetails } from "@/components/tournament-details"
+import { DashboardLayout } from "@/components/dashboard-layout";
+import { TournamentDetails } from "@/components/tournament-details";
 
-export default function TournamentDetailsPage({ params }: { params: { id: string } }) {
+export default async function TournamentDetailsPage(promise: { params: Promise<{ id: string }> }) {
+  const { id } = await promise.params;
+
   return (
     <DashboardLayout>
-      <TournamentDetails id={params.id} />
+      <TournamentDetails id={id} />
     </DashboardLayout>
-  )
+  );
 }

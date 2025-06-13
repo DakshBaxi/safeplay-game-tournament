@@ -207,7 +207,7 @@ export function TournamentEditForm({ id }: { id: string }) {
     // Optional: redirect or reset
     router.push(`/tournaments/${id}`);
   } catch (err: any) {
-    console.error("Tournament creation failed:", err.response?.data || err.message);
+    console.log("Tournament creation failed:", err.response?.data || err.message);
     toast.error(err.response?.data?.error || "Failed to create tournament.");
   }   
   }
