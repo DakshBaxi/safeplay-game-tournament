@@ -1,7 +1,9 @@
+
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Calendar, Check, Clock, Crown, Flag, Mail, Shield, Star, User, Users, X } from "lucide-react"
+import { ArrowLeft, Calendar, Check, Clock, Crown, Flag, Mail, Shield, User, Users, X, Loader2, AlertCircle } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -10,115 +12,175 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useToast } from "@/components/ui/use-toast"
+import { apiClient } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
-// Mock team data
-const teamData = {
-  id: "team1",
-  teamName: "Phantom Squad",
-  captain: "ProGamer123",
-  playerCount: 5,
-  averageTrustScore: 850,
-  kycStatus: "verified",
-  status: "applied",
-  joinedAt: "2025-06-10T14:30:00Z",
-  description:
-    "A competitive Valorant team with years of experience in tactical FPS games. We focus on strategic gameplay and team coordination.",
-  achievements: [
-    "1st Place - Regional Valorant Championship 2024",
-    "3rd Place - Summer League Tournament",
-    "Top 8 - National Esports Cup",
-  ],
-  players: [
-    {
-      id: "p1",
-      name: "ProGamer123",
-      role: "Captain",
-      position: "Duelist",
-      trustScore: 850,
-      kycStatus: "verified",
-      joinedTeam: "2024-01-15",
-      gamesPlayed: 245,
-      winRate: 78,
-      email: "progamer123@email.com",
-    },
-    {
-      id: "p2",
-      name: "AimBot2000",
-      role: "Player",
-      position: "Sentinel",
-      trustScore: 820,
-      kycStatus: "verified",
-      joinedTeam: "2024-02-20",
-      gamesPlayed: 198,
-      winRate: 72,
-      email: "aimbot2000@email.com",
-    },
-    {
-      id: "p3",
-      name: "FlashMaster",
-      role: "Player",
-      position: "Initiator",
-      trustScore: 880,
-      kycStatus: "verified",
-      joinedTeam: "2024-01-20",
-      gamesPlayed: 267,
-      winRate: 81,
-      email: "flashmaster@email.com",
-    },
-    {
-      id: "p4",
-      name: "SmokeKing",
-      role: "Player",
-      position: "Controller",
-      trustScore: 840,
-      kycStatus: "pending",
-      joinedTeam: "2024-03-10",
-      gamesPlayed: 156,
-      winRate: 75,
-      email: "smokeking@email.com",
-    },
-    {
-      id: "p5",
-      name: "ClutchGod",
-      role: "Player",
-      position: "Duelist",
-      trustScore: 860,
-      kycStatus: "verified",
-      joinedTeam: "2024-02-05",
-      gamesPlayed: 223,
-      winRate: 79,
-      email: "clutchgod@email.com",
-    },
-  ],
+// Team interface matching your model
+interface Team {
+  _id: string
+  teamName: string
+  captainId: {
+    _id: string
+    fullName: string
+    email: string
+    trustScore?: number
+    profileUrl: string
+  }
+  players: Array<{
+    _id: string
+    fullName: string
+    email: string
+    trustScore?: number
+     profileUrl: string
+  }>
+  game: 'bgmi' | 'valorant' | 'freeFire' | 'counterStrike2'
+  inviteCode?: string
+  createdAt: string
+  updatedAt: string
+  status?: 'pending' | 'approved' | 'rejected' | 'flagged'
+  averageTrustScore?: number
 }
 
 // Status color mapping
 const statusColors: Record<string, string> = {
-  applied: "bg-blue-500/20 text-blue-500 border-blue-500/20",
-  accepted: "bg-green-500/20 text-green-500 border-green-500/20",
+  pending: "bg-blue-500/20 text-blue-500 border-blue-500/20",
+  approved: "bg-green-500/20 text-green-500 border-green-500/20",
   rejected: "bg-red-500/20 text-red-500 border-red-500/20",
   flagged: "bg-yellow-500/20 text-yellow-500 border-yellow-500/20",
 }
 
-// KYC status color mapping
-const kycColors: Record<string, string> = {
-  verified: "bg-green-500/20 text-green-500 border-green-500/20",
-  pending: "bg-yellow-500/20 text-yellow-500 border-yellow-500/20",
-  not_started: "bg-gray-500/20 text-gray-500 border-gray-500/20",
-}
 
-// Position color mapping
-const positionColors: Record<string, string> = {
-  Duelist: "bg-red-500/20 text-red-500 border-red-500/20",
-  Sentinel: "bg-blue-500/20 text-blue-500 border-blue-500/20",
-  Initiator: "bg-orange-500/20 text-orange-500 border-orange-500/20",
-  Controller: "bg-purple-500/20 text-purple-500 border-purple-500/20",
+
+// Game display names
+const gameNames: Record<string, string> = {
+  bgmi: "BGMI",
+  valorant: "Valorant",
+  freeFire: "Free Fire",
+  counterStrike2: "Counter-Strike 2",
 }
 
 export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; teamId: string }) {
-  // In a real app, you would fetch the team data based on the IDs
-  const team = teamData
+  const [team, setTeam] = useState<Team | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(false)
+  const { toast } = useToast()
+
+  // Fetch team data
+  useEffect(() => {
+    const fetchTeamDetails = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.get(`/api/tournament/${tournamentId}/applicants/teams/${teamId}`)
+        console.log(response.data)
+        setTeam(response.data)
+      } catch (error) {
+        console.error('Error fetching team details:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load team details. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (tournamentId && teamId) {
+      fetchTeamDetails()
+    }
+  }, [tournamentId, teamId, toast])
+
+  // Update team status
+  const updateTeamStatus = async (newStatus: 'approved' | 'rejected' | 'flagged') => {
+    if (!team) return
+
+    try {
+      setUpdating(true)
+      const response = await apiClient.patch(`/api/tournament/${tournamentId}/applicants/${team._id}/status`, {
+        status: newStatus
+      })
+
+      if (response.status === 200) {
+        setTeam(prev => prev ? { ...prev, status: newStatus } : null)
+        toast({
+          title: "Success",
+          description: `Team ${newStatus === 'approved' ? 'approved' : newStatus === 'rejected' ? 'rejected' : 'flagged'} successfully.`,
+        })
+      }
+    } catch (error) {
+      console.error('Error updating team status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update team status. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  // Calculate average trust score
+  // const calculateAverageTrustScore = (team: Team): number => {
+  //   if (team.averageTrustScore) return team.averageTrustScore
+    
+  //   const allPlayers = [team.captainId, ...team.players]
+  //   const validScores = allPlayers
+  //     .map(player => player.trustScore)
+  //     .filter(score => typeof score === 'number' && score > 0)
+    
+  //   if (validScores.length === 0) return 0
+  //   return Math.round(validScores.reduce((sum, score) => sum + score, 0) / validScores.length)
+  // }
+
+  // Send contact email
+  const contactTeam = async () => {
+    if (!team) return
+    
+    try {
+      await apiClient.post(`/api/teams/${team._id}/contact`, {
+        subject: "Tournament Application Update",
+        tournamentId
+      })
+      
+      toast({
+        title: "Success",
+        description: "Contact email sent to team captain.",
+      })
+    } catch (error) {
+      console.error('Error sending contact email:', error)
+      toast({
+        title: "Error",
+        description: "Failed to send contact email. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading team details...</span>
+      </div>
+    )
+  }
+
+  if (!team) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold">Team not found</h3>
+          <p className="text-muted-foreground">The requested team could not be found.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const averageTrustScore = team.averageTrustScore||0
+  const totalPlayers = team.players.length + 1 // +1 for captain
 
   return (
     <div className="space-y-6">
@@ -133,11 +195,15 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
           <p className="text-muted-foreground">Team Details & Player Information</p>
         </div>
         <div className="ml-auto flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={contactTeam}>
             <Mail className="mr-2 h-4 w-4" />
             Contact Team
           </Button>
-          <Button variant="destructive">
+          <Button 
+            variant="destructive" 
+            onClick={() => updateTeamStatus('flagged')}
+            disabled={updating}
+          >
             <Flag className="mr-2 h-4 w-4" />
             Flag Team
           </Button>
@@ -155,33 +221,15 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                   {team.teamName}
                 </CardTitle>
                 <CardDescription>
-                  Led by {team.captain} • {team.playerCount} players
+                  Led by {team.captainId.fullName} • {totalPlayers} players • {gameNames[team.game]}
                 </CardDescription>
               </div>
-              <Badge className={statusColors[team.status]}>
-                {team.status.charAt(0).toUpperCase() + team.status.slice(1)}
+              <Badge className={statusColors[team.status || 'pending']}>
+                {(team.status || 'pending').charAt(0).toUpperCase() + (team.status || 'pending').slice(1)}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div>
-              <h3 className="font-medium mb-2">Team Description</h3>
-              <p className="text-sm text-muted-foreground">{team.description}</p>
-            </div>
-
-            <Separator />
-
-            <div>
-              <h3 className="font-medium mb-3">Team Achievements</h3>
-              <ul className="space-y-2">
-                {team.achievements.map((achievement, index) => (
-                  <li key={index} className="flex items-center gap-2 text-sm">
-                    <Star className="h-4 w-4 text-yellow-500" />
-                    {achievement}
-                  </li>
-                ))}
-              </ul>
-            </div>
 
             <Separator />
 
@@ -191,12 +239,20 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                 <p className="text-sm text-muted-foreground">Manage this team's application status</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" disabled={team.status === "accepted"}>
-                  <Check className="mr-2 h-4 w-4" />
+                <Button 
+                  variant="outline" 
+                  disabled={team.status === "approved" || updating}
+                  onClick={() => updateTeamStatus('approved')}
+                >
+                  {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                   Accept Team
                 </Button>
-                <Button variant="destructive" disabled={team.status === "rejected"}>
-                  <X className="mr-2 h-4 w-4" />
+                <Button 
+                  variant="destructive" 
+                  disabled={team.status === "rejected" || updating}
+                  onClick={() => updateTeamStatus('rejected')}
+                >
+                  {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
                   Reject Team
                 </Button>
               </div>
@@ -217,33 +273,28 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                   <Shield className="h-3.5 w-3.5" />
                   <span
                     className={
-                      team.averageTrustScore >= 800
+                      averageTrustScore >= 800
                         ? "text-green-500"
-                        : team.averageTrustScore >= 750
+                        : averageTrustScore >= 750
                           ? "text-yellow-500"
                           : "text-red-500"
                     }
                   >
-                    {team.averageTrustScore}
+                    {averageTrustScore}
                   </span>
                 </span>
               </div>
               <Separator />
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Team KYC Status</span>
-                <Badge className={kycColors[team.kycStatus]}>
-                  {team.kycStatus
-                    .split("_")
-                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(" ")}
-                </Badge>
+                <span className="text-muted-foreground">Game</span>
+                <span className="font-medium">{gameNames[team.game]}</span>
               </div>
               <Separator />
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Application Date</span>
+                <span className="text-muted-foreground">Team Created</span>
                 <span className="font-medium flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
-                  {new Date(team.joinedAt).toLocaleDateString()}
+                  {new Date(team.createdAt).toLocaleDateString()}
                 </span>
               </div>
               <Separator />
@@ -251,7 +302,7 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                 <span className="text-muted-foreground">Team Size</span>
                 <span className="font-medium flex items-center gap-1">
                   <Users className="h-3.5 w-3.5" />
-                  {team.playerCount}/5
+                  {totalPlayers}
                 </span>
               </div>
             </div>
@@ -272,85 +323,117 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                 <TableRow>
                   <TableHead>Player</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Position</TableHead>
                   <TableHead>Trust Score</TableHead>
-                  <TableHead>KYC Status</TableHead>
-                  <TableHead>Games Played</TableHead>
-                  <TableHead>Win Rate</TableHead>
-                  <TableHead>Joined Team</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {/* Captain */}
+                <TableRow>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span>{team.captainId.fullName}</span>
+                          <Crown className="h-4 w-4 text-yellow-500" />
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="default">Captain</Badge>
+                  </TableCell>
+                  <TableCell>
+               <div className="flex items-center gap-1">
+  <Shield className="h-4 w-4" />
+  {typeof team?.captainId?.trustScore === 'number' ? (
+    <span
+      className={
+        team.captainId.trustScore >= 800
+          ? "text-green-500"
+          : team.captainId.trustScore >= 750
+          ? "text-yellow-500"
+          : "text-red-500"
+      }
+    >
+      {team.captainId.trustScore}
+    </span>
+  ) : (
+    <span className="text-red-500">N/A</span>
+  )}
+</div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">{team.captainId.email}</span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Mail className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Contact Player</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <User className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View Profile</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </TableCell>
+                </TableRow>
+
+                {/* Players */}
                 {team.players.map((player) => (
-                  <TableRow key={player.id}>
+                  <TableRow key={player._id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src="/placeholder.svg" />
-                          <AvatarFallback>{player.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
+                   
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span>{player.name}</span>
-                            {player.role === "Captain" && <Crown className="h-4 w-4 text-yellow-500" />}
-                          </div>
-                          <div className="text-xs text-muted-foreground">{player.email}</div>
+                          <span>{player.fullName}</span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={player.role === "Captain" ? "default" : "outline"}>{player.role}</Badge>
+                      <Badge variant="outline">Player</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={positionColors[player.position]}>{player.position}</Badge>
+                 <div className="flex items-center gap-1">
+  <Shield className="h-4 w-4" />
+  {typeof player.trustScore === 'number' ? (
+    <span
+      className={
+        player.trustScore >= 800
+          ? "text-green-500"
+          : player.trustScore >= 750
+          ? "text-yellow-500"
+          : "text-red-500"
+      }
+    >
+      {player.trustScore}
+    </span>
+  ) : (
+    <span className="text-red-500">N/A</span>
+  )}
+</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Shield className="h-4 w-4" />
-                        <span
-                          className={
-                            player.trustScore >= 800
-                              ? "text-green-500"
-                              : player.trustScore >= 750
-                                ? "text-yellow-500"
-                                : "text-red-500"
-                          }
-                        >
-                          {player.trustScore}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={kycColors[player.kycStatus]}>
-                        {player.kycStatus
-                          .split("_")
-                          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                          .join(" ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium">{player.gamesPlayed}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          "font-medium",
-                          player.winRate >= 75
-                            ? "text-green-500"
-                            : player.winRate >= 60
-                              ? "text-yellow-500"
-                              : "text-red-500",
-                        )}
-                      >
-                        {player.winRate}%
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>{new Date(player.joinedTeam).toLocaleDateString()}</span>
-                      </div>
+                      <span className="text-sm text-muted-foreground">{player.email}</span>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -396,6 +479,14 @@ export function TeamDetails({ tournamentId, teamId }: { tournamentId: string; te
                     </TableCell>
                   </TableRow>
                 ))}
+
+                {team.players.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      No additional players in this team.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
